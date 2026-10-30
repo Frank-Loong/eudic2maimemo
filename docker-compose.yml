@@ -1,0 +1,14 @@
+services:
+  eudic2maimemo:
+    build: .
+    image: eudic2maimemo:latest
+    container_name: eudic2maimemo
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - TZ=Asia/Shanghai
+      - SYNC_INTERVAL_HOURS=24
+    command: ["serve"]
+    # 只跑一次就退出，可以用：
+    #   docker compose run --rm eudic2maimemo sync --full

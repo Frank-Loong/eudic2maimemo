@@ -1,0 +1,18 @@
+[Unit]
+Description=Eudic to MaiMemo sync
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# 改成你的实际路径与用户
+WorkingDirectory=/opt/eudic2maimemo
+EnvironmentFile=/opt/eudic2maimemo/.env
+ExecStart=/opt/eudic2maimemo/.venv/bin/python -m eudic2maimemo serve --interval 24
+Restart=on-failure
+RestartSec=60
+# 限流（403）时进程会退出，交给 RestartSec 等一会儿再试
+SuccessExitStatus=0 2
+
+[Install]
+WantedBy=multi-user.target
