@@ -29,6 +29,15 @@ class FromEnvTest(unittest.TestCase):
         with self.assertRaises(SyncError):
             Config.from_env({"IGNORE_PATTERNS": "[unclosed"})
 
+    def test_min_star_parsed(self):
+        self.assertEqual(Config.from_env({"MIN_STAR": "4"}).min_star, 4)
+        self.assertEqual(Config.from_env({"MIN_STAR": " 2 "}).min_star, 2)
+        self.assertEqual(Config.from_env({}).min_star, 0)
+
+    def test_min_star_invalid_falls_back_to_zero(self):
+        self.assertEqual(Config.from_env({"MIN_STAR": "abc"}).min_star, 0)
+        self.assertEqual(Config.from_env({"MIN_STAR": "-3"}).min_star, 0)
+
     def test_accepts_legacy_names(self):
         config = Config.from_env(
             {

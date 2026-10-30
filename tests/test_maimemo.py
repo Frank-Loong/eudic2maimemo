@@ -76,6 +76,26 @@ class GetNotepadTest(unittest.TestCase):
             MaimemoClient("tok", http=FakeHttp()).get_notepad("")
 
 
+class LookupSpellingsTest(unittest.TestCase):
+    def test_returns_matched_lowercase(self):
+        http = FakeHttp(
+            {"success": True, "data": {"voc": [{"spelling": "Cat"}, {"spelling": "dog"}]}}
+        )
+        found = MaimemoClient("tok", http=http).lookup_spellings(["cat", "dog", "cnc"])
+        self.assertEqual(found, {"cat", "dog"})
+
+    def test_batches_requests(self):
+        http = FakeHttp({"success": True, "data": {"voc": []}})
+        MaimemoClient("tok", http=http).lookup_spellings([f"w{i}" for i in range(2500)])
+        self.assertEqual(len(http.calls), 3)
+
+    def test_deduplicates_input(self):
+        http = FakeHttp({"success": True, "data": {"voc": [{"spelling": "cat"}]}})
+        MaimemoClient("tok", http=http).lookup_spellings(["cat", "cat", "CAT"])
+        sent = http.calls[0]["json_body"]["spellings"]
+        self.assertEqual(sent, ["cat", "CAT"])
+
+
 class UpdateNotepadTest(unittest.TestCase):
     def test_sends_content_under_notepad_key(self):
         http = FakeHttp({"success": True, "data": {"notepad": {"id": "np-1", "title": "欧路生词"}}})

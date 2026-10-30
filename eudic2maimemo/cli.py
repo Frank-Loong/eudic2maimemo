@@ -11,11 +11,11 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import re
 import sys
-
 from dataclasses import asdict
 
 from . import notify
@@ -27,6 +27,7 @@ from .notepad import count_words, extract_keys, parse_blocks
 from .service import run_forever
 from .stats import format_summary, summarize
 from .sync import run_sync
+from .words import lemma_candidates
 
 
 def _notify(config: Config, message: str) -> None:
@@ -39,6 +40,8 @@ def cmd_sync(args: argparse.Namespace) -> int:
     if args.ignore:
         config.ignore_patterns.extend(args.ignore)
         config.compile_ignore_patterns()
+    if getattr(args, "min_star", None) is not None:
+        config.min_star = max(0, args.min_star)
 
     try:
         report = _run_once(config, args, verbose=not args.json)
@@ -86,6 +89,8 @@ def cmd_serve(args: argparse.Namespace) -> int:
     if args.ignore:
         config.ignore_patterns.extend(args.ignore)
         config.compile_ignore_patterns()
+    if getattr(args, "min_star", None) is not None:
+        config.min_star = max(0, args.min_star)
 
     interval_hours = args.interval
     if interval_hours is None:
@@ -169,6 +174,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         print("\n== 欧路词典 ==\n  跳过（未设置 EUDIC_API_KEY）")
 
     notepad_words: set[str] = set()
+    maimemo = None
     if config.maimemo_token:
         print("\n== 墨墨背单词 ==")
         maimemo = MaimemoClient(config.maimemo_token)
@@ -215,6 +221,38 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             preview = ", ".join(sorted(missing)[:20])
             print(f"  缺失示例: {preview}")
             ok = False
+
+    if args.dict:
+        if eudic is None or maimemo is None:
+            print("\n[warn] --dict 需要欧路密钥和墨墨 token 都配好")
+            return 1
+        print("\n== 词典覆盖（会翻完整个生词本）==")
+        words = eudic.fetch_all(config.eudic_category_ids)
+        unique = {w.key: w for w in words}
+        hit = maimemo.lookup_spellings([w.word for w in unique.values()])
+        direct = [w for key, w in unique.items() if key in hit]
+        missing = [w for key, w in unique.items() if key not in hit]
+
+        # 墨墨词典只收录原形，屈折变化要拿候选原形再查一遍，否则会误判
+        variants = {w.key: lemma_candidates(w.word) for w in missing}
+        queried = [c for cands in variants.values() for c in cands]
+        hit_lemma = maimemo.lookup_spellings(queried) if queried else set()
+        normalised = [
+            w for w in missing if any(c in hit_lemma for c in variants.get(w.key, []))
+        ]
+        absent = [
+            w for w in missing if not any(c in hit_lemma for c in variants.get(w.key, []))
+        ]
+
+        total = len(unique) or 1
+        print(f"  欧路共 {len(unique)} 个不同词条")
+        print(f"  词典直接收录 {len(direct)}（{len(direct) / total * 100:.1f}%）")
+        print(f"  原形可查、拼写为屈折形式 {len(normalised)}（{len(normalised) / total * 100:.1f}%）")
+        print(f"  查不到 {len(absent)}（{len(absent) / total * 100:.1f}%）")
+        if absent:
+            preview = ", ".join(w.word for w in absent[:25])
+            print(f"  查不到示例: {preview}")
+            print("  这类词写进云词本不会生成背诵卡片，可用 IGNORE_PATTERNS 过滤")
 
     print("\n[ok]" if ok else "\n[warn] 存在待处理项")
     return 0 if ok else 1
@@ -301,6 +339,13 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="正则",
         help="额外的忽略规则，可重复；命中则不写入（如 '\\s' 跳过词组、'[\\u4e00-\\u9fff]' 跳过中文）",
     )
+    p_sync.add_argument(
+        "--min-star",
+        type=int,
+        default=None,
+        metavar="N",
+        help="只同步星级不低于 N 的词条（默认取 MIN_STAR，否则不限）",
+    )
     p_sync.add_argument("--json", action="store_true", help="输出机器可读结果")
     p_sync.add_argument("--quiet", action="store_true", help="不打印新增词列表")
     p_sync.set_defaults(func=cmd_sync)
@@ -315,6 +360,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_serve.add_argument("--full", action="store_true", help="每轮都全量重建（一般不需要）")
     p_serve.add_argument("--ignore", action="append", metavar="正则", help="额外的忽略规则")
+    p_serve.add_argument("--min-star", type=int, default=None, metavar="N", help="只同步星级不低于 N 的词条")
     p_serve.add_argument("--quiet", action="store_true", help="不打印新增词列表")
     p_serve.add_argument(
         "--max-runs",
@@ -326,6 +372,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_doc = sub.add_parser("doctor", help="检查配置、token 与云词本状态")
     p_doc.add_argument("--deep", action="store_true", help="翻完整个生词本做覆盖度对比")
+    p_doc.add_argument(
+        "--dict", action="store_true", help="核对墨墨词典能否查到这些词条"
+    )
     p_doc.set_defaults(func=cmd_doctor)
 
     p_exp = sub.add_parser("export", help="导出欧路全量词表")
@@ -363,10 +412,9 @@ def _setup_console() -> None:
     except Exception:
         pass
     for stream in (sys.stdout, sys.stderr):
-        try:
+        # 被重定向到文件或管道时没有 reconfigure，失败可以忽略
+        with contextlib.suppress(Exception):
             stream.reconfigure(encoding="utf-8", errors="replace")
-        except Exception:
-            pass
 
 
 def main(argv: list[str] | None = None) -> int:

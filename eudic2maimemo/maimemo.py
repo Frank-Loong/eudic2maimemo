@@ -80,6 +80,30 @@ class MaimemoClient:
             updated_time=notepad.get("updated_time") or "",
         )
 
+    def lookup_spellings(self, spellings: list[str], batch_size: int = 1000) -> set[str]:
+        """批量核对哪些拼写存在于墨墨词典中，返回命中的小写拼写集合。
+
+        接口一次最多接受 1000 个拼写，未命中的不会出现在返回结果里，
+        所以只能判断"存在与否"，拿不到否定证据之外的细节。
+        """
+        unique = [s.strip() for s in dict.fromkeys(spellings) if s.strip()]
+        found: set[str] = set()
+        for start in range(0, len(unique), batch_size):
+            chunk = unique[start : start + batch_size]
+            response = self.http.request(
+                "POST",
+                f"{BASE}/vocabulary/query",
+                headers=self.headers,
+                json_body={"spellings": chunk},
+                timeout=60,
+            )
+            data = self._unwrap(response)
+            for item in data.get("voc") or []:
+                spelling = (item.get("spelling") or "").strip().lower()
+                if spelling:
+                    found.add(spelling)
+        return found
+
     def update_notepad(
         self, notepad_id: str, content: str, *, title: str, brief: str
     ) -> Notepad:

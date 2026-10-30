@@ -52,7 +52,7 @@ class HttpClientTest(unittest.TestCase):
         self.addCleanup(self.sleep.stop)
 
     def test_returns_response_on_success(self):
-        http, session = client_with([FakeResponse(200)])
+        http, _ = client_with([FakeResponse(200)])
         response = http.request("GET", "https://example.com")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(http.request_count, 1)

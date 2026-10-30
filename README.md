@@ -215,8 +215,10 @@ Windows 用任务计划程序：创建基本任务 → 触发器选每天 → �
 | `sync` | 增量同步，只写新词 |
 | `sync --full` | 按欧路词表重建云词本 |
 | `sync --dry-run` | 预览将要写入的内容 |
+| `sync --min-star 4` | 只同步 4 星及以上的词条 |
 | `doctor` | 检查配置，列出所有生词本和云词本 |
 | `doctor --deep` | 翻完整个词本，报告哪些词还没同步 |
+| `doctor --dict` | 核对墨墨词典能否查到这些词条 |
 | `stats` | 词本画像：总数、星级、缺音标、近月新增 |
 | `export --out words.csv --format csv` | 导出全部词表 |
 
@@ -226,6 +228,7 @@ Windows 用任务计划程序：创建基本任务 → 触发器选每天 → �
 - 墨墨的云词本接口只能整段覆盖写入，每次同步都会传全文
 - 不同步删除：欧路删词，墨墨那边不会跟着删
 - `sync --full` 会清掉你手动加进云词本的词，运行前会提示数量
+- `--min-star` 在全量重建时同样生效，低于阈值的词不会写回云词本
 - 只支持欧路的四种语言：英、法、德、西
 
 ## 数据安全
@@ -242,6 +245,6 @@ coverage run --source=eudic2maimemo -m unittest discover -s tests -t .
 coverage report -m
 ```
 
-107 个用例，CI 里设了 80% 覆盖率门槛。
+117 个用例，CI 里跑 ruff 检查并设 80% 覆盖率门槛。
 
 MIT

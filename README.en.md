@@ -196,8 +196,10 @@ Which to pick: use the first for debugging or a one-time import; prefer the seco
 | `sync` | Incremental, new words only |
 | `sync --full` | Rebuild the notepad from Eudic |
 | `sync --dry-run` | Preview, write nothing |
+| `sync --min-star 4` | Only entries rated 4 stars or higher |
 | `doctor` | Check config, list wordbooks and notepads |
 | `doctor --deep` | Page through everything, report gaps |
+| `doctor --dict` | Check which entries exist in MaiMemo's dictionary |
 | `stats` | Wordbook breakdown: stars, gaps, recent months |
 | `export --out words.csv --format csv` | Dump the full wordbook |
 
@@ -207,6 +209,7 @@ Which to pick: use the first for debugging or a one-time import; prefer the seco
 - MaiMemo only replaces the notepad `content` wholesale
 - Deletions aren't synced
 - `--full` drops words you added to the notepad by hand; it tells you how many first
+- `--min-star` also applies to full rebuilds, so low-rated entries won't be written back
 - Eudic's four languages only: English, French, German, Spanish
 
 ## Data safety
@@ -223,6 +226,6 @@ coverage run --source=eudic2maimemo -m unittest discover -s tests -t .
 coverage report -m
 ```
 
-107 tests, CI enforces an 80% coverage floor.
+117 tests; CI runs ruff and enforces an 80% coverage floor.
 
 MIT

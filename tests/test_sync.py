@@ -140,6 +140,31 @@ class SyncTest(unittest.TestCase):
         self.assertIn("cat", maimemo.saved)
         self.assertNotIn("cover letter", maimemo.saved)
 
+    def test_min_star_filters_low_star_words(self):
+        maimemo = FakeMaimemo("")
+        eudic = FakeEudic(
+            new_words=[
+                Word(word="one", add_time="2026-10-01T00:00:00Z", star=1),
+                Word(word="four", add_time="2026-10-01T00:00:00Z", star=4),
+                Word(word="five", add_time="2026-10-01T00:00:00Z", star=5),
+            ]
+        )
+        config = make_config()
+        config.min_star = 4
+
+        report = run_sync(config, eudic=eudic, maimemo=maimemo)
+
+        self.assertEqual(report.added, 2)
+        self.assertEqual(report.low_star, 1)
+        self.assertNotIn("one", maimemo.saved)
+
+    def test_min_star_zero_keeps_everything(self):
+        maimemo = FakeMaimemo("")
+        eudic = FakeEudic(new_words=[Word(word="one", star=1)])
+        report = run_sync(make_config(), eudic=eudic, maimemo=maimemo)
+        self.assertEqual(report.added, 1)
+        self.assertEqual(report.low_star, 0)
+
     def test_invalid_ignore_pattern_raises(self):
         config = make_config()
         config.ignore_patterns = ["[unclosed"]

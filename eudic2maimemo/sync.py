@@ -48,6 +48,7 @@ class SyncReport:
     fetched: int = 0
     added: int = 0
     skipped: int = 0
+    low_star: int = 0
     total: int = 0
     blocks: int = 0
     requests: int = 0
@@ -65,6 +66,8 @@ class SyncReport:
         ]
         if self.skipped:
             parts.append(f"按规则跳过 {self.skipped}")
+        if self.low_star:
+            parts.append(f"低于星级未同步 {self.low_star}")
         parts += [
             f"云词本共 {self.total} 词 / {self.blocks} 段",
             f"请求 {self.requests} 次",
@@ -128,6 +131,16 @@ def run_sync(
         report.skipped = len(fresh) - len(kept)
         if report.skipped:
             print(f"[info] 按忽略规则跳过 {report.skipped} 个词条", file=sys.stderr)
+        fresh = kept
+
+    if config.min_star > 0:
+        kept = [w for w in fresh if w.star >= config.min_star]
+        report.low_star = len(fresh) - len(kept)
+        if report.low_star:
+            print(
+                f"[info] 星级低于 {config.min_star} 而跳过 {report.low_star} 个词条",
+                file=sys.stderr,
+            )
         fresh = kept
 
     if limit is not None and 0 <= limit < len(fresh):

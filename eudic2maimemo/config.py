@@ -14,6 +14,13 @@ except ImportError:  # pragma: no cover
     load_dotenv = None
 
 
+def _int_or_zero(value: str | None) -> int:
+    try:
+        return max(0, int((value or "0").strip()))
+    except ValueError:
+        return 0
+
+
 def _truthy(value: str | None) -> bool:
     return (value or "").strip().lower() in ("1", "true", "yes", "on")
 
@@ -37,13 +44,11 @@ class Config:
     notify_url: str = ""
     notify_body: str = ""
     notify_always: bool = False
+    min_star: int = 0
 
     def ignored(self, word: str) -> bool:
         """词条是否命中忽略规则（正则，忽略大小写）。"""
-        for pattern in self.ignore_patterns:
-            if re.search(pattern, word, re.IGNORECASE):
-                return True
-        return False
+        return any(re.search(pattern, word, re.IGNORECASE) for pattern in self.ignore_patterns)
 
     def compile_ignore_patterns(self) -> None:
         """启动时校验正则，避免跑到一半才发现写法有误。"""
@@ -82,7 +87,7 @@ class Config:
             raise SyncError(f"缺少配置：{', '.join(missing)}")
 
     @classmethod
-    def from_env(cls, env: dict[str, str] | None = None) -> "Config":
+    def from_env(cls, env: dict[str, str] | None = None) -> Config:
         if env is None:
             if load_dotenv is not None:
                 load_dotenv()
@@ -117,6 +122,7 @@ class Config:
             notify_url=(env.get("NOTIFY_URL") or "").strip(),
             notify_body=env.get("NOTIFY_BODY") or "",
             notify_always=_truthy(env.get("NOTIFY_ALWAYS")),
+            min_star=_int_or_zero(env.get("MIN_STAR")),
         )
         config.compile_ignore_patterns()
         return config

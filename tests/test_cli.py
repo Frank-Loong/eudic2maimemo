@@ -16,6 +16,13 @@ def config():
     return Config(eudic_api_key="NIS x", eudic_category_ids=["0"])
 
 
+def _report():
+    from eudic2maimemo.sync import SyncReport
+
+    report = SyncReport(mode="incremental")
+    return report
+
+
 WORD = Word(
     word="cat",
     add_time="2026-01-05T10:00:00Z",
@@ -200,6 +207,64 @@ class DoctorTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("np-abc", out)
         self.assertIn("MOMO_NOTEPAD_ID", out)
+
+
+class MinStarTest(unittest.TestCase):
+    def test_cli_overrides_config(self):
+        captured = {}
+        with patch("eudic2maimemo.cli.Config.from_env", return_value=config()), patch(
+            "eudic2maimemo.cli.run_sync"
+        ) as run_sync:
+            run_sync.side_effect = lambda cfg, **kw: captured.update(min_star=cfg.min_star) or _report()
+            with redirect_stdout(io.StringIO()):
+                cli.main(["sync", "--min-star", "4"])
+        self.assertEqual(captured["min_star"], 4)
+
+    def test_negative_min_star_is_clamped(self):
+        captured = {}
+        with patch("eudic2maimemo.cli.Config.from_env", return_value=config()), patch(
+            "eudic2maimemo.cli.run_sync"
+        ) as run_sync:
+            run_sync.side_effect = lambda cfg, **kw: captured.update(min_star=cfg.min_star) or _report()
+            with redirect_stdout(io.StringIO()):
+                cli.main(["sync", "--min-star", "-2"])
+        self.assertEqual(captured["min_star"], 0)
+
+
+class DoctorDictTest(unittest.TestCase):
+    def test_reports_missing_entries(self):
+        from eudic2maimemo.eudic import Word
+        from eudic2maimemo.maimemo import Notepad
+
+        cfg = Config(
+            eudic_api_key="NIS x",
+            eudic_category_ids=["0"],
+            maimemo_token="tok",
+            maimemo_notepad_id="np-1",
+        )
+        buf = io.StringIO()
+        with patch("eudic2maimemo.cli.Config.from_env", return_value=cfg), patch(
+            "eudic2maimemo.cli.EudicClient"
+        ) as eudic_cls, patch("eudic2maimemo.cli.MaimemoClient") as mm_cls:
+            eudic_cls.return_value.list_books.return_value = []
+            eudic_cls.return_value.fetch_desc.return_value = []
+            eudic_cls.return_value.fetch_asc.return_value = []
+            eudic_cls.return_value.fetch_all.return_value = [
+                Word(word="cat"),
+                Word(word="cnc"),
+            ]
+            eudic_cls.return_value.http.request_count = 1
+            mm_cls.return_value.list_notepads.return_value = [Notepad(id="np-1", title="t", content="")]
+            mm_cls.return_value.get_notepad.return_value = Notepad(id="np-1", title="t", content="")
+            mm_cls.return_value.lookup_spellings.return_value = {"cat"}
+
+            with redirect_stdout(buf):
+                cli.main(["doctor", "--dict"])
+
+        out = buf.getvalue()
+        self.assertIn("词典直接收录 1", out)
+        self.assertIn("查不到 1", out)
+        self.assertIn("cnc", out)
 
 
 class ServeTest(unittest.TestCase):
