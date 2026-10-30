@@ -7,9 +7,13 @@ Look words up in Eudic, review them in MaiMemo. This handles the copying in betw
 [![CI](https://github.com/Frank-Loong/eudic2maimemo/actions/workflows/ci.yml/badge.svg)](https://github.com/Frank-Loong/eudic2maimemo/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
+Start at step 1 for a fresh setup. Already configured and troubleshooting? Jump to **Troubleshooting**. No GitHub? See **Running without GitHub**.
+
 ## What it does
 
 Eudic is good at looking words up: swap in a dictionary, trust the definitions. MaiMemo is good at scheduling reviews. Each keeps its own wordbook and the two don't talk, so anything you look up has to be retyped into MaiMemo, and nobody keeps that up.
+
+Below, the Eudic side is called the *wordbook* and the MaiMemo side the *notepad*.
 
 This closes the gap. It reads the Eudic wordbook, drops whatever the notepad already contains, and appends the rest grouped by the day it was added. Once it runs, you leave it alone.
 
@@ -113,34 +117,28 @@ To change the time, edit `cron: "30 22 * * *"` in `.github/workflows/sync.yml`. 
 
 ## Notifications (optional)
 
-Any endpoint that accepts GET or POST works. WeCom, DingTalk and Server Chan are all verified.
+Results can be pushed to any endpoint that accepts GET or POST. WeCom is tested; DingTalk and Server Chan use the same request shape and should work as written, but haven't been verified one by one.
 
-| Variable | Required | Description |
-|---|---|---|
-| `NOTIFY_URL` | yes | webhook URL |
-| `NOTIFY_BODY` | no | POST body template; `{content}` is replaced with the message. Omit it to send a GET with a `content` query parameter |
-| `NOTIFY_ALWAYS` | no | set to `1` to be notified every run; by default only runs with new words notify |
-
-Delivery: a summary when new words are written, the error reason on failure, silence otherwise.
-
-**WeCom group bot**: group settings → group bot → add → copy the webhook URL.
+**WeCom group bot**: group settings → group bot → add → copy the webhook URL, then add two secrets:
 
 | Variable | Value |
 |---|---|
 | `NOTIFY_URL` | `https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=YOUR_KEY` |
 | `NOTIFY_BODY` | `{"msgtype":"text","text":{"content":"{content}"}}` |
 
-DingTalk uses the same POST JSON shape, so `NOTIFY_BODY` is identical.
+DingTalk takes the same POST JSON, so `NOTIFY_BODY` is identical. If the bot uses signed requests, you'll need the signed URL instead.
 
 **Server Chan** uses GET with `{content}` in the URL:
 
-```
+```dotenv
 NOTIFY_URL=https://sctapi.ftqq.com/YOUR_KEY.send?title=words&desp={content}
 ```
 
-The message is one summary line:
+Delivery: a summary when new words are written, the error reason on failure, silence otherwise unless `NOTIFY_ALWAYS` is set.
 
-```
+The message is a single summary line:
+
+```text
 已写入｜模式=incremental · 欧路匹配 12 · 新增 12 · 云词本共 6076 词 / 391 段 · 请求 3 次
 ```
 
@@ -189,41 +187,70 @@ On Windows, Task Scheduler: create a basic task, trigger daily, action "Start a 
 
 Which to pick: use the first for debugging or a one-time import; prefer the second for unattended operation, since the interval is managed by the program and the log stays continuous; the third when you already run containers; the fourth when you'd rather not install Python.
 
-## Advanced configuration
+## Configuration
 
-By default one wordbook maps to one notepad. The options below are opt-in and work in `.env` or repository Variables.
+Configuration comes from environment variables, or a `.env` file next to the program. On GitHub Actions, put keys in Secrets and non-sensitive options in Variables.
 
-**Split wordbooks across notepads**
+| Variable | Default | Notes |
+|---|---|---|
+| `EUDIC_API_KEY` | required | Starts with `NIS `; the token alone also works |
+| `EUDIC_CATEGORY_ID` | `0` | Wordbook id, comma-separated for several |
+| `EUDIC_LANGUAGE` | `en` | `en` Eudic, `fr` French, `de` German, `es` Spanish |
+| `MOMO_API_KEY` | required | MaiMemo Open API token |
+| `MOMO_NOTEPAD_ID` | required | Target notepad, `np-` prefixed |
+| `IGNORE_PATTERNS` | empty | Regex filters, separated by `;` or newline |
+| `MIN_STAR` | `0` | Skip entries below this rating; `0` means no limit |
+| `EUDIC_ROUTES` | empty | Wordbook-to-notepad mapping |
+| `KEEP_ORPHANS` | `0` | Keep hand-added entries on rebuild |
+| `SYNC_INTERVAL_HOURS` | `24` | Interval for `serve` |
+| `NOTIFY_URL` | empty | Notification endpoint |
+| `NOTIFY_BODY` | empty | Request body template |
+| `NOTIFY_ALWAYS` | `0` | Notify every run; default is only when new words appear |
+| `MOMO_NOTEPAD_TITLE` | `欧路生词` | Used only when the notepad title is empty; existing titles are never overwritten |
+| `MOMO_NOTEPAD_BRIEF` | `来自欧路词典的生词` | Same, for the description |
 
+### Filtering out entries
+
+MaiMemo only creates cards for entries in its own dictionary. Phrases, Chinese terms and proper nouns go in and do nothing. Filter them out with regex:
+
+```dotenv
+# skip phrases containing spaces, and anything with Chinese characters
+IGNORE_PATTERNS=^\S*\s\S*$;[一-龥]
 ```
+
+Or pass it ad hoc: `sync --ignore '\s'`. Separate patterns with a semicolon or newline; a match on any of them skips the entry.
+
+### Splitting wordbooks across notepads
+
+```dotenv
 EUDIC_ROUTES=0=np-aaaa;133716565810649835=np-bbbb
 ```
 
-Left is the Eudic wordbook id, right is the MaiMemo notepad id. Wordbooks not listed still go to `MOMO_NOTEPAD_ID`. Existing notepad titles are preserved.
+Left is the wordbook id, right the notepad id. Wordbooks not listed still go to `MOMO_NOTEPAD_ID`. Existing notepad titles are preserved.
 
-**Only sync high-rated entries**
+### Syncing only high-rated entries
 
-```
+```dotenv
 MIN_STAR=4
 ```
 
-`--min-star N` overrides it for a single run, and skipped counts are reported separately.
+Skipped counts are reported separately. `sync --min-star N` overrides it for one run.
 
-**Keep hand-added words on rebuild**
+### Keeping hand-added entries on rebuild
 
-```
+```dotenv
 KEEP_ORPHANS=1
 ```
 
-Entries in the notepad that Eudic doesn't have are collected into a trailing section instead of being dropped. Same as `--keep-orphans` on the command line.
+Entries in the notepad that Eudic doesn't have are collected into a trailing section instead of being dropped. Same as `sync --keep-orphans`.
 
-**Wait out a rate limit**
+### Waiting out a rate limit
 
-```
+```bash
 python -m eudic2maimemo sync --wait-on-limit 3600
 ```
 
-Eudic locks you out for about an hour. This sleeps and retries once. Meant for `serve` on your own machine; GitHub Actions caps jobs at 15 minutes, so don't use it there.
+Eudic locks you out for about an hour; this sleeps and retries once. Meant for `serve` on your own machine. GitHub Actions caps jobs at 15 minutes, so don't use it there.
 
 ## Commands
 
@@ -232,22 +259,22 @@ Eudic locks you out for about an hour. This sleeps and retries once. Meant for `
 | `sync` | Incremental, new words only |
 | `sync --full` | Rebuild the notepad from Eudic |
 | `sync --dry-run` | Preview, write nothing |
-| `sync --min-star 4` | Only entries rated 4 stars or higher |
-| `sync --keep-orphans` | Preserve hand-added entries on rebuild |
+| `serve` | Run continuously at a fixed interval |
 | `doctor` | Check config, list wordbooks and notepads |
 | `doctor --deep` | Page through everything, report gaps |
 | `doctor --dict` | Check which entries exist in MaiMemo's dictionary |
 | `stats` | Wordbook breakdown: stars, gaps, recent months |
-| `export --out words.csv --format csv` | Dump the full wordbook |
+| `export` | Dump the wordbook; `--format` accepts `text`, `csv` or `json` |
+
+Other flags are covered in their own sections: `--min-star`, `--keep-orphans`, `--wait-on-limit`, `--limit`, `--json`, `--quiet`.
 
 ## Limits
 
-- 5100 entries per direction is an API cap; union tops out near 10200
-- MaiMemo only replaces the notepad `content` wholesale
+- 5100 entries per direction is an API cap; the union tops out near 10200, so very large wordbooks can't be fully covered
+- MaiMemo replaces the notepad `content` wholesale, so every run sends the full text
 - Deletions aren't synced
-- `--full` drops words you added by hand unless `--keep-orphans` is set; it reports the count first
-- `--min-star` also applies to full rebuilds, so low-rated entries won't be written back
-- Eudic's four languages only: English, French, German, Spanish
+- `sync --full` drops entries the notepad has but Eudic doesn't unless `--keep-orphans` is set, and reports the count first; `--min-star` also applies during rebuilds
+- Four languages only: English, French, German, Spanish
 
 ## Data safety
 

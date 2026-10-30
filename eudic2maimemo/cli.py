@@ -418,7 +418,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_exp.set_defaults(func=cmd_export)
 
-    p_stats = sub.add_parser("stats", help="词本画像：规模、增长节奏、数据缺口")
+    p_stats = sub.add_parser("stats", help="生词本画像：规模、增长节奏、数据缺口")
     p_stats.add_argument("--months", type=int, default=12, help="展示最近多少个月（默认 12）")
     p_stats.add_argument("--json", action="store_true", help="输出机器可读结果")
     p_stats.set_defaults(func=cmd_stats)
