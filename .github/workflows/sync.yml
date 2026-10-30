@@ -59,6 +59,7 @@ jobs:
           EUDIC_CATEGORY_ID: ${{ vars.EUDIC_CATEGORY_ID || '0' }}
           MOMO_API_KEY: ${{ secrets.MOMO_API_KEY }}
           MOMO_NOTEPAD_ID: ${{ secrets.MOMO_NOTEPAD_ID }}
+          MIN_STAR: ${{ vars.MIN_STAR || '0' }}
           NOTIFY_URL: ${{ secrets.NOTIFY_URL }}
           NOTIFY_BODY: ${{ secrets.NOTIFY_BODY }}
           # 密钥不进日志：GitHub 会自动掩码 secrets 里的值
