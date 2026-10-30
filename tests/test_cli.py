@@ -231,6 +231,42 @@ class MinStarTest(unittest.TestCase):
         self.assertEqual(captured["min_star"], 0)
 
 
+class WaitOnLimitTest(unittest.TestCase):
+    def test_retries_once_after_waiting(self):
+        from eudic2maimemo.http import RateLimited
+
+        sleeps = []
+        calls = {"n": 0}
+
+        def fake_run(cfg, **kwargs):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RateLimited("403")
+            return _report()
+
+        with patch("eudic2maimemo.cli.Config.from_env", return_value=config()), patch(
+            "eudic2maimemo.cli.run_sync", side_effect=fake_run
+        ), patch("eudic2maimemo.cli.time.sleep", side_effect=sleeps.append):
+            with redirect_stdout(io.StringIO()):
+                code = cli.main(["sync", "--wait-on-limit", "120"])
+
+        self.assertEqual(code, 0)
+        self.assertEqual(calls["n"], 2)
+        self.assertEqual(sleeps, [120])
+
+    def test_without_flag_limit_fails_fast(self):
+        from eudic2maimemo.http import RateLimited
+
+        with patch("eudic2maimemo.cli.Config.from_env", return_value=config()), patch(
+            "eudic2maimemo.cli.run_sync", side_effect=RateLimited("403")
+        ), patch("eudic2maimemo.cli.time.sleep") as sleeper:
+            with redirect_stdout(io.StringIO()):
+                code = cli.main(["sync"])
+
+        self.assertEqual(code, 1)
+        sleeper.assert_not_called()
+
+
 class DoctorDictTest(unittest.TestCase):
     def test_reports_missing_entries(self):
         from eudic2maimemo.eudic import Word

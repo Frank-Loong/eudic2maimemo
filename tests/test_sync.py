@@ -182,5 +182,128 @@ class DateTest(unittest.TestCase):
         self.assertEqual(to_cn_date("not-a-date"), "未知日期")
 
 
+
+
+class MultiMaimemo:
+    """按云词本 ID 分别保存内容。"""
+
+    def __init__(self, contents=None):
+        self.contents = dict(contents or {})
+        self.saved = {}
+        self.http = types.SimpleNamespace(request_count=1)
+
+    def get_notepad(self, notepad_id):
+        return Notepad(
+            id=notepad_id,
+            title=f"本-{notepad_id}",
+            content=self.contents.get(notepad_id, ""),
+            brief="",
+        )
+
+    def update_notepad(self, notepad_id, content, *, title, brief):
+        self.contents[notepad_id] = content
+        self.saved[notepad_id] = content
+        return Notepad(id=notepad_id, title=title, content=content)
+
+
+class RouteEudic:
+    """按生词本返回不同的词。"""
+
+    def __init__(self, by_book):
+        self.by_book = by_book
+        self.http = types.SimpleNamespace(request_count=1)
+
+    def fetch_new(self, book_ids, known_keys):
+        out = []
+        for book in book_ids:
+            out.extend(w for w in self.by_book.get(book, []) if w.key not in known_keys)
+        return sorted(out, key=lambda w: w.add_time)
+
+    def fetch_all(self, book_ids):
+        out = []
+        for book in book_ids:
+            out.extend(self.by_book.get(book, []))
+        return sorted(out, key=lambda w: w.add_time)
+
+
+class RoutesTest(unittest.TestCase):
+    def test_books_go_to_their_own_notepads(self):
+        config = make_config()
+        config.eudic_category_ids = ["0", "1"]
+        config.routes = {"1": "np-second"}
+        eudic = RouteEudic(
+            {
+                "0": [word("alpha", "2026-10-01T00:00:00Z")],
+                "1": [word("beta", "2026-10-02T00:00:00Z")],
+            }
+        )
+        maimemo = MultiMaimemo()
+
+        report = run_sync(config, eudic=eudic, maimemo=maimemo)
+
+        self.assertEqual(report.added, 2)
+        self.assertEqual(len(report.targets), 2)
+        self.assertIn("alpha", maimemo.saved["np-test"])
+        self.assertIn("beta", maimemo.saved["np-second"])
+        self.assertNotIn("beta", maimemo.saved["np-test"])
+
+    def test_books_without_route_fall_back_to_default(self):
+        config = make_config()
+        config.eudic_category_ids = ["0", "1"]
+        eudic = RouteEudic({"0": [word("a")], "1": [word("b")]})
+        maimemo = MultiMaimemo()
+
+        run_sync(config, eudic=eudic, maimemo=maimemo)
+
+        self.assertEqual(len(maimemo.saved), 1)
+        self.assertIn("a", maimemo.saved["np-test"])
+
+    def test_one_failing_notepad_does_not_block_others(self):
+        config = make_config()
+        config.eudic_category_ids = ["0", "1"]
+        config.routes = {"1": "np-broken"}
+
+        class BrokenOne(MultiMaimemo):
+            def get_notepad(self, notepad_id):
+                if notepad_id == "np-broken":
+                    raise SyncError("云词本不存在")
+                return super().get_notepad(notepad_id)
+
+        eudic = RouteEudic({"0": [word("a")], "1": [word("b")]})
+        maimemo = BrokenOne()
+
+        with self.assertRaises(SyncError) as ctx:
+            run_sync(config, eudic=eudic, maimemo=maimemo)
+
+        self.assertIn("np-broken", str(ctx.exception))
+        self.assertIn("a", maimemo.saved["np-test"])  # 另一个目标照常写入
+
+
+class KeepOrphansTest(unittest.TestCase):
+    def test_manual_words_survive_full_rebuild(self):
+        config = make_config()
+        config.keep_orphans = True
+        maimemo = MultiMaimemo({"np-test": "#2026-01-01\nmanual\n"})
+        eudic = RouteEudic({"0": [word("cat", "2026-10-01T00:00:00Z")]})
+
+        report = run_sync(config, mode="full", eudic=eudic, maimemo=maimemo)
+
+        content = maimemo.saved["np-test"]
+        self.assertIn("cat", content)
+        self.assertIn("manual", content)
+        self.assertIn("手动保留", content)
+        self.assertEqual(report.orphaned, 0)
+
+    def test_without_flag_orphans_are_dropped_and_counted(self):
+        config = make_config()
+        maimemo = MultiMaimemo({"np-test": "#2026-01-01\nmanual\n"})
+        eudic = RouteEudic({"0": [word("cat", "2026-10-01T00:00:00Z")]})
+
+        report = run_sync(config, mode="full", eudic=eudic, maimemo=maimemo)
+
+        self.assertNotIn("manual", maimemo.saved["np-test"])
+        self.assertEqual(report.orphaned, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

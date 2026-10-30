@@ -14,6 +14,21 @@ except ImportError:  # pragma: no cover
     load_dotenv = None
 
 
+def _parse_routes(raw: str | None) -> dict[str, str]:
+    """解析 `生词本ID=云词本ID` 形式的映射，多个用分号或换行隔开。"""
+    routes: dict[str, str] = {}
+    for part in re.split(r"[;\n]+", raw or ""):
+        if "=" not in part:
+            continue
+        book, notepad = (x.strip() for x in part.split("=", 1))
+        if not book or not notepad:
+            continue
+        if not notepad.startswith("np-"):
+            raise SyncError(f"路由里的云词本 ID 应以 np- 开头：{notepad}")
+        routes[book] = notepad
+    return routes
+
+
 def _int_or_zero(value: str | None) -> int:
     try:
         return max(0, int((value or "0").strip()))
@@ -45,6 +60,8 @@ class Config:
     notify_body: str = ""
     notify_always: bool = False
     min_star: int = 0
+    routes: dict[str, str] = field(default_factory=dict)
+    keep_orphans: bool = False
 
     def ignored(self, word: str) -> bool:
         """词条是否命中忽略规则（正则，忽略大小写）。"""
@@ -123,6 +140,8 @@ class Config:
             notify_body=env.get("NOTIFY_BODY") or "",
             notify_always=_truthy(env.get("NOTIFY_ALWAYS")),
             min_star=_int_or_zero(env.get("MIN_STAR")),
+            routes=_parse_routes(env.get("EUDIC_ROUTES")),
+            keep_orphans=_truthy(env.get("KEEP_ORPHANS")),
         )
         config.compile_ignore_patterns()
         return config

@@ -189,6 +189,42 @@ On Windows, Task Scheduler: create a basic task, trigger daily, action "Start a 
 
 Which to pick: use the first for debugging or a one-time import; prefer the second for unattended operation, since the interval is managed by the program and the log stays continuous; the third when you already run containers; the fourth when you'd rather not install Python.
 
+## Advanced configuration
+
+By default one wordbook maps to one notepad. The options below are opt-in and work in `.env` or repository Variables.
+
+**Split wordbooks across notepads**
+
+```
+EUDIC_ROUTES=0=np-aaaa;133716565810649835=np-bbbb
+```
+
+Left is the Eudic wordbook id, right is the MaiMemo notepad id. Wordbooks not listed still go to `MOMO_NOTEPAD_ID`. Existing notepad titles are preserved.
+
+**Only sync high-rated entries**
+
+```
+MIN_STAR=4
+```
+
+`--min-star N` overrides it for a single run, and skipped counts are reported separately.
+
+**Keep hand-added words on rebuild**
+
+```
+KEEP_ORPHANS=1
+```
+
+Entries in the notepad that Eudic doesn't have are collected into a trailing section instead of being dropped. Same as `--keep-orphans` on the command line.
+
+**Wait out a rate limit**
+
+```
+python -m eudic2maimemo sync --wait-on-limit 3600
+```
+
+Eudic locks you out for about an hour. This sleeps and retries once. Meant for `serve` on your own machine; GitHub Actions caps jobs at 15 minutes, so don't use it there.
+
 ## Commands
 
 | Command | Purpose |
@@ -197,6 +233,7 @@ Which to pick: use the first for debugging or a one-time import; prefer the seco
 | `sync --full` | Rebuild the notepad from Eudic |
 | `sync --dry-run` | Preview, write nothing |
 | `sync --min-star 4` | Only entries rated 4 stars or higher |
+| `sync --keep-orphans` | Preserve hand-added entries on rebuild |
 | `doctor` | Check config, list wordbooks and notepads |
 | `doctor --deep` | Page through everything, report gaps |
 | `doctor --dict` | Check which entries exist in MaiMemo's dictionary |
@@ -208,7 +245,7 @@ Which to pick: use the first for debugging or a one-time import; prefer the seco
 - 5100 entries per direction is an API cap; union tops out near 10200
 - MaiMemo only replaces the notepad `content` wholesale
 - Deletions aren't synced
-- `--full` drops words you added to the notepad by hand; it tells you how many first
+- `--full` drops words you added by hand unless `--keep-orphans` is set; it reports the count first
 - `--min-star` also applies to full rebuilds, so low-rated entries won't be written back
 - Eudic's four languages only: English, French, German, Spanish
 
@@ -226,6 +263,6 @@ coverage run --source=eudic2maimemo -m unittest discover -s tests -t .
 coverage report -m
 ```
 
-117 tests; CI runs ruff and enforces an 80% coverage floor.
+137 tests; CI runs ruff and enforces an 80% coverage floor.
 
 MIT

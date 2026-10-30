@@ -16,6 +16,7 @@ import json
 import os
 import re
 import sys
+import time
 from dataclasses import asdict
 
 from . import notify
@@ -42,8 +43,18 @@ def cmd_sync(args: argparse.Namespace) -> int:
         config.compile_ignore_patterns()
     if getattr(args, "min_star", None) is not None:
         config.min_star = max(0, args.min_star)
+    if getattr(args, "keep_orphans", False):
+        config.keep_orphans = True
 
     try:
+        report = _run_once(config, args, verbose=not args.json)
+    except RateLimited as exc:
+        if not args.wait_on_limit:
+            _notify(config, f"同步失败：{exc}")
+            raise
+        wait = max(60, args.wait_on_limit)
+        print(f"[wait] 触发限流，{wait} 秒后重试一次", file=sys.stderr)
+        time.sleep(wait)
         report = _run_once(config, args, verbose=not args.json)
     except SyncError as exc:
         _notify(config, f"同步失败：{exc}")
@@ -91,6 +102,8 @@ def cmd_serve(args: argparse.Namespace) -> int:
         config.compile_ignore_patterns()
     if getattr(args, "min_star", None) is not None:
         config.min_star = max(0, args.min_star)
+    if getattr(args, "keep_orphans", False):
+        config.keep_orphans = True
 
     interval_hours = args.interval
     if interval_hours is None:
@@ -141,6 +154,11 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     print(f"欧路生词本 ID   : {', '.join(config.eudic_category_ids)}")
     print(f"墨墨 token      : {'已设置' if config.maimemo_token else '缺失'}")
     print(f"墨墨云词本 ID   : {config.maimemo_notepad_id or '缺失'}")
+    if config.routes:
+        pairs = ", ".join(f"{book}→{np}" for book, np in config.routes.items())
+        print(f"生词本路由      : {pairs}")
+    if config.min_star:
+        print(f"星级阈值        : ≥{config.min_star}")
 
     if not config.eudic_api_key and not config.maimemo_token:
         print("\n[error] 欧路和墨墨的密钥都没设置，先把其中一个填进 .env 或仓库 Secrets")
@@ -346,6 +364,18 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="N",
         help="只同步星级不低于 N 的词条（默认取 MIN_STAR，否则不限）",
     )
+    p_sync.add_argument(
+        "--keep-orphans",
+        action="store_true",
+        help="全量重建时保留云词本里欧路没有的词条，置于「手动保留」段",
+    )
+    p_sync.add_argument(
+        "--wait-on-limit",
+        type=int,
+        default=0,
+        metavar="秒",
+        help="遇到 403 限流时等待指定秒数后重试一次，默认不等待",
+    )
     p_sync.add_argument("--json", action="store_true", help="输出机器可读结果")
     p_sync.add_argument("--quiet", action="store_true", help="不打印新增词列表")
     p_sync.set_defaults(func=cmd_sync)
@@ -361,6 +391,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_serve.add_argument("--full", action="store_true", help="每轮都全量重建（一般不需要）")
     p_serve.add_argument("--ignore", action="append", metavar="正则", help="额外的忽略规则")
     p_serve.add_argument("--min-star", type=int, default=None, metavar="N", help="只同步星级不低于 N 的词条")
+    p_serve.add_argument("--keep-orphans", action="store_true", help="全量重建时保留手动词条")
     p_serve.add_argument("--quiet", action="store_true", help="不打印新增词列表")
     p_serve.add_argument(
         "--max-runs",

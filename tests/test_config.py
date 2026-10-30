@@ -38,6 +38,27 @@ class FromEnvTest(unittest.TestCase):
         self.assertEqual(Config.from_env({"MIN_STAR": "abc"}).min_star, 0)
         self.assertEqual(Config.from_env({"MIN_STAR": "-3"}).min_star, 0)
 
+    def test_routes_parsed(self):
+        config = Config.from_env(
+            {"EUDIC_ROUTES": "0=np-aaa;133716565810649835=np-bbb"}
+        )
+        self.assertEqual(
+            config.routes,
+            {"0": "np-aaa", "133716565810649835": "np-bbb"},
+        )
+
+    def test_routes_split_by_newline(self):
+        config = Config.from_env({"EUDIC_ROUTES": "0=np-aaa\n1=np-bbb"})
+        self.assertEqual(config.routes, {"0": "np-aaa", "1": "np-bbb"})
+
+    def test_route_without_np_prefix_is_rejected(self):
+        with self.assertRaises(SyncError):
+            Config.from_env({"EUDIC_ROUTES": "0=1234567"})
+
+    def test_routes_ignore_malformed_entries(self):
+        config = Config.from_env({"EUDIC_ROUTES": "0=np-aaa;;坏的;=np-x"})
+        self.assertEqual(config.routes, {"0": "np-aaa"})
+
     def test_accepts_legacy_names(self):
         config = Config.from_env(
             {

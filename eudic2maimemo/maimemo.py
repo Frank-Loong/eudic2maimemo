@@ -15,6 +15,7 @@ class Notepad:
     title: str
     content: str
     updated_time: str = ""
+    brief: str = ""
 
 
 class MaimemoClient:
@@ -51,6 +52,7 @@ class MaimemoClient:
                 title=x.get("title") or "",
                 content=x.get("content") or "",
                 updated_time=x.get("updated_time") or "",
+                brief=x.get("brief") or "",
             )
             for x in (data.get("notepads") or [])
         ]
@@ -78,6 +80,7 @@ class MaimemoClient:
             title=notepad.get("title") or "",
             content=notepad.get("content") or "",
             updated_time=notepad.get("updated_time") or "",
+            brief=notepad.get("brief") or "",
         )
 
     def lookup_spellings(self, spellings: list[str], batch_size: int = 1000) -> set[str]:
