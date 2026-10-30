@@ -1,0 +1,82 @@
+name: Sync
+
+on:
+  schedule:
+    # 每天 22:30 UTC = 次日 06:30（北京时间）
+    # GitHub 的 cron 在高峰期可能延迟几分钟到几十分钟，这属于平台行为
+    - cron: "30 22 * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "同步模式"
+        required: true
+        default: incremental
+        type: choice
+        options:
+          - incremental
+          - full
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eudic-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check credentials
+        env:
+          EUDIC_API_KEY: ${{ secrets.EUDIC_API_KEY }}
+          MOMO_API_KEY: ${{ secrets.MOMO_API_KEY }}
+          MOMO_NOTEPAD_ID: ${{ secrets.MOMO_NOTEPAD_ID }}
+        run: |
+          missing=0
+          for name in EUDIC_API_KEY MOMO_API_KEY MOMO_NOTEPAD_ID; do
+            if [ -z "${!name}" ]; then
+              echo "::error::缺少 Secret：$name（请到 Settings → Secrets and variables → Actions 里添加）"
+              missing=1
+            fi
+          done
+          exit $missing
+
+      - name: Sync
+        env:
+          EUDIC_API_KEY: ${{ secrets.EUDIC_API_KEY }}
+          EUDIC_CATEGORY_ID: ${{ vars.EUDIC_CATEGORY_ID || '0' }}
+          MOMO_API_KEY: ${{ secrets.MOMO_API_KEY }}
+          MOMO_NOTEPAD_ID: ${{ secrets.MOMO_NOTEPAD_ID }}
+          NOTIFY_URL: ${{ secrets.NOTIFY_URL }}
+          NOTIFY_BODY: ${{ secrets.NOTIFY_BODY }}
+          # 密钥不进日志：GitHub 会自动掩码 secrets 里的值
+        run: |
+          set -o pipefail
+          if [ "${{ github.event.inputs.mode }}" = "full" ]; then
+            python -m eudic2maimemo sync --full | tee sync.log
+          else
+            python -m eudic2maimemo sync | tee sync.log
+          fi
+
+      - name: Write job summary
+        if: always()
+        run: |
+          {
+            echo "### 欧路 → 墨墨 同步结果"
+            echo ""
+            echo '```'
+            cat sync.log 2>/dev/null || echo "（无输出）"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

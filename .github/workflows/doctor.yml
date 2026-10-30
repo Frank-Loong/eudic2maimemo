@@ -1,0 +1,46 @@
+name: Doctor
+
+# 手动点一下就能看到：
+#   - 你所有的欧路生词本 ID
+#   - 你所有的墨墨云词本 ID
+#   - 当前云词本里有多少词
+# 不需要在本地装 Python。
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run doctor
+        env:
+          EUDIC_API_KEY: ${{ secrets.EUDIC_API_KEY }}
+          EUDIC_CATEGORY_ID: ${{ vars.EUDIC_CATEGORY_ID || '0' }}
+          MOMO_API_KEY: ${{ secrets.MOMO_API_KEY }}
+          MOMO_NOTEPAD_ID: ${{ secrets.MOMO_NOTEPAD_ID }}
+        run: |
+          set +e
+          python -m eudic2maimemo doctor 2>&1 | tee doctor.log
+          {
+            echo "### 自检结果"
+            echo ""
+            echo '```'
+            cat doctor.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 0

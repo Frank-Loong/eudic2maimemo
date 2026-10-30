@@ -1,0 +1,66 @@
+name: Coverage
+
+# 每周跑一次 doctor --deep，翻完整个生词本，把覆盖缺口写进 job summary。
+# 这不是必需品，但词本大了以后，偶尔会有"某段时间的词没进去"这种情况，
+# 每周看一眼比事后猜要省事。
+
+on:
+  schedule:
+    - cron: "0 1 * * 1" # 每周一 01:00 UTC = 09:00 北京时间
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check credentials
+        env:
+          EUDIC_API_KEY: ${{ secrets.EUDIC_API_KEY }}
+          MOMO_API_KEY: ${{ secrets.MOMO_API_KEY }}
+          MOMO_NOTEPAD_ID: ${{ secrets.MOMO_NOTEPAD_ID }}
+        run: |
+          for name in EUDIC_API_KEY MOMO_API_KEY MOMO_NOTEPAD_ID; do
+            if [ -z "${!name}" ]; then
+              echo "::error::缺少 Secret：$name"
+              exit 1
+            fi
+          done
+
+      - name: Coverage report
+        env:
+          EUDIC_API_KEY: ${{ secrets.EUDIC_API_KEY }}
+          EUDIC_CATEGORY_ID: ${{ vars.EUDIC_CATEGORY_ID || '0' }}
+          MOMO_API_KEY: ${{ secrets.MOMO_API_KEY }}
+          MOMO_NOTEPAD_ID: ${{ secrets.MOMO_NOTEPAD_ID }}
+        run: |
+          # doctor 在发现缺口时退出码为 1。巡检的目的只是报告，
+          # 所以这里不把它当成失败，避免每周固定飘红。
+          set +e
+          python -m eudic2maimemo doctor --deep > coverage.log 2>&1
+          code=$?
+          cat coverage.log
+          {
+            echo "### 覆盖度巡检"
+            echo ""
+            echo '```'
+            cat coverage.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ $code -ne 0 ]; then
+            echo "::warning::巡检发现缺口或错误，详见上方输出"
+          fi
+          exit 0

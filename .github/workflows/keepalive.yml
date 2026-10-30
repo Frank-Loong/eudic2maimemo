@@ -1,0 +1,35 @@
+name: Keepalive
+
+# 公开仓库有一条平台规则：连续 60 天没有任何提交活动，
+# GitHub 会自动停用仓库里的定时工作流（schedule）。
+# 这个工作流每月写一次时间戳，维持"有活动"的状态。
+#
+# 如果你的仓库是私有仓库，可以放心删除本文件（私有仓库不受该规则影响）。
+
+on:
+  schedule:
+    - cron: "0 3 1 * *" # 每月 1 日 03:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  touch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Touch keepalive file
+        run: |
+          mkdir -p .github
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > .github/keepalive
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/keepalive
+          if git diff --staged --quiet; then
+            echo "没有变化，跳过提交"
+          else
+            git commit -m "chore: keepalive $(date -u +%Y-%m)"
+            git push
+          fi
