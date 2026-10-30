@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eudic2maimemo"
+version = "1.0.1"
+description = "把欧路词典生词本同步到墨墨背单词云词本，突破分页上限、天生增量、可跑在 GitHub Actions"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Frank Loong" }]
+keywords = ["eudic", "maimemo", "vocabulary", "spaced-repetition", "sync"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Education",
+]
+dependencies = [
+    "requests>=2.31.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/Frank-Loong/eudic2maimemo"
+Issues = "https://github.com/Frank-Loong/eudic2maimemo/issues"
+
+[project.scripts]
+eudic2maimemo = "eudic2maimemo.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["eudic2maimemo*"]
+
+[tool.ruff]
+line-length = 100
