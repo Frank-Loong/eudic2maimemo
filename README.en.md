@@ -209,6 +209,8 @@ Configuration comes from environment variables, or a `.env` file next to the pro
 | `MOMO_NOTEPAD_TITLE` | `欧路生词` | Used only when the notepad title is empty; existing titles are never overwritten |
 | `MOMO_NOTEPAD_BRIEF` | `来自欧路词典的生词` | Same, for the description |
 
+Coming from another sync tool? The older names also work: `EUDIC_AUTHORIZATION` for `EUDIC_API_KEY`, `EUDIC_CATEGORY_IDS` for `EUDIC_CATEGORY_ID`, `MAIMEMO_TOKEN` and `MAIMEMO_NOTEPAD_ID` for `MOMO_API_KEY` and `MOMO_NOTEPAD_ID`.
+
 ### Filtering out entries
 
 MaiMemo only creates cards for entries in its own dictionary. Phrases, Chinese terms and proper nouns go in and do nothing. Filter them out with regex:
@@ -263,8 +265,8 @@ Eudic locks you out for about an hour; this sleeps and retries once. Meant for `
 | `doctor` | Check config, list wordbooks and notepads |
 | `doctor --deep` | Page through everything, report gaps |
 | `doctor --dict` | Check which entries exist in MaiMemo's dictionary |
-| `stats` | Wordbook breakdown: stars, gaps, recent months |
-| `export` | Dump the wordbook; `--format` accepts `text`, `csv` or `json` |
+| `stats --months 6` | Wordbook breakdown: stars, gaps, last six months |
+| `export --out words.csv` | Dump the wordbook; `--format` accepts `text`, `csv` or `json` |
 
 Other flags are covered in their own sections: `--min-star`, `--keep-orphans`, `--wait-on-limit`, `--limit`, `--json`, `--quiet`.
 
@@ -290,6 +292,6 @@ coverage run --source=eudic2maimemo -m unittest discover -s tests -t .
 coverage report -m
 ```
 
-137 tests; CI runs ruff and enforces an 80% coverage floor.
+Tests cover paging boundaries and the two-direction union, incremental early stop, content merging, multi-target routing, ignore rules, retry and rate-limit classification, plus documentation-vs-code consistency. CI runs ruff and fails below 80% coverage.
 
 MIT

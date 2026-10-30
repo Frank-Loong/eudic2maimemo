@@ -226,6 +226,8 @@ Windows 用任务计划程序：创建基本任务 → 触发器选每天 → �
 | `MOMO_NOTEPAD_TITLE` | `欧路生词` | 仅当云词本标题为空时使用，不会改写已有标题 |
 | `MOMO_NOTEPAD_BRIEF` | `来自欧路词典的生词` | 同上，仅当简介为空时使用 |
 
+从其它同步工具迁移过来的话，旧命名同样可用：`EUDIC_AUTHORIZATION` 等同 `EUDIC_API_KEY`，`EUDIC_CATEGORY_IDS` 等同 `EUDIC_CATEGORY_ID`，`MAIMEMO_TOKEN`、`MAIMEMO_NOTEPAD_ID` 分别等同 `MOMO_API_KEY`、`MOMO_NOTEPAD_ID`。
+
 ### 过滤掉不需要的词条
 
 墨墨只给词典里存在的词条建卡，词组、中文、专有名词写进去也不生成卡片。用正则把它们挡掉：
@@ -282,8 +284,8 @@ python -m eudic2maimemo sync --wait-on-limit 3600
 | `doctor` | 检查配置，列出所有生词本和云词本 |
 | `doctor --deep` | 翻完整个生词本，报告哪些词还没同步 |
 | `doctor --dict` | 核对墨墨词典能否查到这些词条 |
-| `stats` | 生词本画像：总数、星级、缺音标、近月新增 |
-| `export` | 导出全部词表，`--format` 可选 `text` / `csv` / `json` |
+| `stats --months 6` | 生词本画像：总数、星级、缺音标、近半年新增 |
+| `export --out words.csv` | 导出全部词表，`--format` 可选 `text` / `csv` / `json` |
 
 其余参数见各节：`--min-star`、`--keep-orphans`、`--wait-on-limit`、`--limit`、`--json`、`--quiet`。
 
@@ -309,6 +311,6 @@ coverage run --source=eudic2maimemo -m unittest discover -s tests -t .
 coverage report -m
 ```
 
-137 个用例，CI 里跑 ruff 检查并设 80% 覆盖率门槛。
+用例覆盖分页边界与双向并集、增量早停、内容合并、多目标路由、忽略规则、重试与限流分类，以及文档与代码的一致性。CI 跑 ruff 检查和测试，覆盖率低于 80% 直接失败。
 
 MIT
